@@ -1,0 +1,113 @@
+version: '3.8'
+
+services:
+  # Hadoop NameNode
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: namenode
+    restart: always
+    ports:
+      - "9870:9870"
+      - "9000:9000"
+    volumes:
+      - hadoop_namenode:/hadoop/dfs/name
+      - ./data:/data
+    environment:
+      - CLUSTER_NAME=terraflow
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:9000
+    env_file:
+      - ./docker/hadoop.env
+    networks:
+      - terraflow_network
+
+  # Hadoop DataNode
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: datanode
+    restart: always
+    ports:
+      - "9864:9864"
+    volumes:
+      - hadoop_datanode:/hadoop/dfs/data
+      - ./data:/data
+    environment:
+      - SERVICE_PRECONDITION=namenode:9870
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:9000
+    env_file:
+      - ./docker/hadoop.env
+    networks:
+      - terraflow_network
+    depends_on:
+      - namenode
+
+  # Spark Master
+  spark-master:
+    image: bitnami/spark:3.4.1
+    container_name: spark-master
+    environment:
+      - SPARK_MODE=master
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+    ports:
+      - "8080:8080"
+      - "7077:7077"
+    volumes:
+      - ./data:/data
+      - ./notebooks:/notebooks
+      - ./src:/src
+    networks:
+      - terraflow_network
+
+  # Spark Worker
+  spark-worker:
+    image: bitnami/spark:3.4.1
+    container_name: spark-worker
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_MEMORY=4G
+      - SPARK_WORKER_CORES=2
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+    volumes:
+      - ./data:/data
+      - ./notebooks:/notebooks
+      - ./src:/src
+    networks:
+      - terraflow_network
+    depends_on:
+      - spark-master
+
+  # Jupyter Notebook with PySpark
+  jupyter:
+    image: jupyter/pyspark-notebook:latest
+    container_name: jupyter-pyspark
+    ports:
+      - "8888:8888"
+      - "4040:4040"
+    volumes:
+      - ./notebooks:/home/jovyan/work/notebooks
+      - ./data:/home/jovyan/work/data
+      - ./src:/home/jovyan/work/src
+      - ./dashboard:/home/jovyan/work/dashboard
+    environment:
+      - JUPYTER_ENABLE_LAB=yes
+      - SPARK_MASTER=spark://spark-master:7077
+      - PYSPARK_SUBMIT_ARGS=--master spark://spark-master:7077 pyspark-shell
+    networks:
+      - terraflow_network
+    depends_on:
+      - spark-master
+      - namenode
+
+volumes:
+  hadoop_namenode:
+  hadoop_datanode:
+
+networks:
+  terraflow_network:
+    driver: bridge

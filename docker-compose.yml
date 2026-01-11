@@ -40,48 +40,6 @@ services:
     depends_on:
       - namenode
 
-  # Spark Master
-  spark-master:
-    image: bitnami/spark:3.4.1
-    container_name: spark-master
-    environment:
-      - SPARK_MODE=master
-      - SPARK_RPC_AUTHENTICATION_ENABLED=no
-      - SPARK_RPC_ENCRYPTION_ENABLED=no
-      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
-      - SPARK_SSL_ENABLED=no
-    ports:
-      - "8080:8080"
-      - "7077:7077"
-    volumes:
-      - ./data:/data
-      - ./notebooks:/notebooks
-      - ./src:/src
-    networks:
-      - terraflow_network
-
-  # Spark Worker
-  spark-worker:
-    image: bitnami/spark:3.4.1
-    container_name: spark-worker
-    environment:
-      - SPARK_MODE=worker
-      - SPARK_MASTER_URL=spark://spark-master:7077
-      - SPARK_WORKER_MEMORY=4G
-      - SPARK_WORKER_CORES=2
-      - SPARK_RPC_AUTHENTICATION_ENABLED=no
-      - SPARK_RPC_ENCRYPTION_ENABLED=no
-      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
-      - SPARK_SSL_ENABLED=no
-    volumes:
-      - ./data:/data
-      - ./notebooks:/notebooks
-      - ./src:/src
-    networks:
-      - terraflow_network
-    depends_on:
-      - spark-master
-
   # Jupyter Notebook with PySpark
   jupyter:
     image: jupyter/pyspark-notebook:latest
@@ -89,6 +47,7 @@ services:
     ports:
       - "8888:8888"
       - "4040:4040"
+      - "4041:4041"
     volumes:
       - ./notebooks:/home/jovyan/work/notebooks
       - ./data:/home/jovyan/work/data
@@ -96,12 +55,12 @@ services:
       - ./dashboard:/home/jovyan/work/dashboard
     environment:
       - JUPYTER_ENABLE_LAB=yes
-      - SPARK_MASTER=spark://spark-master:7077
-      - PYSPARK_SUBMIT_ARGS=--master spark://spark-master:7077 pyspark-shell
+      - GRANT_SUDO=yes
+    user: root
+    command: start-notebook.sh --NotebookApp.token='' --NotebookApp.password=''
     networks:
       - terraflow_network
     depends_on:
-      - spark-master
       - namenode
 
 volumes:

@@ -144,26 +144,6 @@ Access: `http://localhost:8050`
 4. Significant route-level variability
 5. Temporal patterns highly predictable
 
----
-
-## ✅ Assignment Requirements
-
-All 5 requirements **100% met**:
-
-| Requirement | Status | Evidence |
-|-------------|--------|----------|
-| **1. PySpark Processing** | ✅ | DataFrames + RDDs in all notebooks |
-| **2. HDFS Storage** | ✅ | Raw + Bronze + Silver layers |
-| **3. Spark MLlib** | ✅ | Random Forest (85%+ accuracy) |
-| **4. Statistical Analysis** | ✅ | Inferential + Bayesian |
-| **5. Python + D3.js Viz** | ✅ | 8 charts + Dashboard + D3 |
-
-**Expected Grade: 90-95/100** ⭐⭐⭐⭐⭐
-
-See [REQUIREMENTS_VERIFICATION.md](REQUIREMENTS_VERIFICATION.md) for detailed compliance.
-
----
-
 ## 🔧 Troubleshooting
 
 ### Docker Issues
@@ -199,11 +179,6 @@ python dashboard/app.py
 
 ---
 
-## 👨‍💻 Author
 
-**CPS6005 Big Data Analytics Assessment**  
-January 2026
 
----
-
-**🎉 Professional Big Data Solution - Ready for Submission!**
+-

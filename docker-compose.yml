@@ -55,6 +55,8 @@ services:
     environment:
       - INIT_DAEMON_STEP=setup_spark
       - CORE_CONF_fs_defaultFS=hdfs://namenode:9000
+      # Optional stability defaults
+      - SPARK_MASTER_OPTS=-Dspark.deploy.defaultCores=2
     networks:
       - terraflow_network
     depends_on:
@@ -74,16 +76,23 @@ services:
     environment:
       - SPARK_MASTER=spark://spark-master:7077
       - SPARK_WORKER_CORES=2
-      - SPARK_WORKER_MEMORY=4G
+
+      # IMPORTANT: give the worker enough memory for executors
+      # Your notebook was requesting 2g; set worker >= 3G to allow overhead.
+      - SPARK_WORKER_MEMORY=3G
+
       - CORE_CONF_fs_defaultFS=hdfs://namenode:9000
+
+      # Optional stability defaults (reduce "executor lost" / heartbeat issues)
+      - SPARK_WORKER_OPTS=-Dspark.worker.cleanup.enabled=true -Dspark.worker.cleanup.interval=1800
     networks:
       - terraflow_network
     depends_on:
       - spark-master
 
-  # Jupyter Notebook with PySpark
+  # Jupyter Notebook with PySpark (Spark driver)
   jupyter:
-    image: jupyter/pyspark-notebook:latest
+    image: jupyter/pyspark-notebook:spark-3.3.2
     container_name: jupyter-pyspark
     restart: always
     ports:
@@ -98,8 +107,18 @@ services:
     environment:
       - JUPYTER_ENABLE_LAB=yes
       - GRANT_SUDO=yes
+
+      # Spark connection
       - SPARK_MASTER=spark://spark-master:7077
-      - PYSPARK_SUBMIT_ARGS=--master spark://spark-master:7077 pyspark-shell
+
+      # Make sure the driver is reachable by executors:
+      # Use the *service/container name* on the docker network.
+      # (Executors will connect back to this.)
+      - SPARK_DRIVER_HOST=jupyter-pyspark
+      - SPARK_DRIVER_BIND_ADDRESS=0.0.0.0
+
+      # Safer submit args (do not force driver ports)
+      - PYSPARK_SUBMIT_ARGS=--master spark://spark-master:7077 --conf spark.driver.host=jupyter-pyspark --conf spark.driver.bindAddress=0.0.0.0 --conf spark.network.timeout=600s --conf spark.executor.heartbeatInterval=60s pyspark-shell
     user: root
     command: start-notebook.sh --NotebookApp.token='' --NotebookApp.password=''
     networks:

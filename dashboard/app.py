@@ -1,302 +1,349 @@
-import pandas as pd
 import json
-from dash import Dash, dcc, html, Input, Output, State
+import pandas as pd
+import numpy as np
+
+from dash import Dash, dcc, html, Input, Output
 import plotly.express as px
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 
-# ============================================================================
-# DATA LOADING
-# ============================================================================
 
-# Load pre-aggregated data
+# =============================================================================
+# DATA LOADING (pre-aggregated outputs from Notebook 06)
+# =============================================================================
+DATA_DIR = "../data/processed"
+
+def detect_columns(df, route_candidates, cong_candidates, count_candidates):
+    route_col = next((c for c in route_candidates if c in df.columns), None)
+    cong_col  = next((c for c in cong_candidates if c in df.columns), None)
+    count_col = next((c for c in count_candidates if c in df.columns), None)
+    return route_col, cong_col, count_col
+
+def load_parquet(path):
+    return pd.read_parquet(path)
+
 try:
-    cong_hour = pd.read_parquet("../data/processed/congestion_by_hour.parquet")
-    cong_route = pd.read_parquet("../data/processed/congestion_by_route.parquet")
-    speed_trend = pd.read_parquet("../data/processed/speed_trend.parquet")
-    route_perf = pd.read_parquet("../data/processed/route_performance.parquet")
-    
-    with open("../data/processed/kpis.json", 'r') as f:
-        kpis = json.load(f)
-    
-    print("✅ All data loaded successfully")
+    cong_hour = load_parquet(f"{DATA_DIR}/congestion_by_hour.parquet")
+    cong_route = load_parquet(f"{DATA_DIR}/congestion_by_route.parquet")
+    speed_trend = load_parquet(f"{DATA_DIR}/speed_trend.parquet")
 except Exception as e:
-    print(f"⚠️  Error loading data: {e}")
-    print("Please run Notebook 06 first to export dashboard data")
-    exit(1)
+    raise RuntimeError(
+        f"❌ Could not load required dashboard parquet outputs from {DATA_DIR}. "
+        f"Run Notebook 06 first. Error: {e}"
+    )
 
-# ============================================================================
-# APP INITIALIZATION
-# ============================================================================
+# Optional but highly recommended for route efficiency chart + D3 network
+route_perf = None
+try:
+    route_perf = load_parquet(f"{DATA_DIR}/route_performance.parquet")
+except Exception:
+    route_perf = None
 
-app = Dash(__name__, title="TerraFlow Urban Mobility Dashboard")
-app._favicon = None
+# Optional KPIs
+kpis = None
+try:
+    with open(f"{DATA_DIR}/kpis.json", "r") as f:
+        kpis = json.load(f)
+except Exception:
+    kpis = None
 
-# Get unique values for filters
-route_col = cong_route.columns[0]
-routes = sorted(cong_route[route_col].unique())
-cong_levels = sorted(cong_hour["Degree_of_congestion"].unique())
 
-# ============================================================================
-# LAYOUT
-# ============================================================================
-
-app.layout = html.Div([
-    # Header
-    html.Div([
-        html.H1("🚌 TerraFlow Urban Mobility Dashboard", 
-                style={'color': '#2c3e50', 'marginBottom': '10px'}),
-        html.P("Real-time insights into public transport congestion and performance",
-               style={'color': '#7f8c8d', 'fontSize': '16px'})
-    ], style={'textAlign': 'center', 'padding': '20px', 'backgroundColor': '#ecf0f1'}),
-    
-    # KPI Cards
-    html.Div([
-        html.Div([
-            html.H3(f"{kpis['total_records']:,}", style={'color': '#3498db', 'margin': '0'}),
-            html.P("Total Records", style={'color': '#7f8c8d', 'margin': '5px 0'})
-        ], className='kpi-card'),
-        
-        html.Div([
-            html.H3(f"{kpis['avg_speed']:.1f} km/h", style={'color': '#2ecc71', 'margin': '0'}),
-            html.P("Average Speed", style={'color': '#7f8c8d', 'margin': '5px 0'})
-        ], className='kpi-card'),
-        
-        html.Div([
-            html.H3(f"{kpis['avg_sri']:.2f}", style={'color': '#e74c3c', 'margin': '0'}),
-            html.P("Service Reliability", style={'color': '#7f8c8d', 'margin': '5px 0'})
-        ], className='kpi-card'),
-        
-        html.Div([
-            html.H3(f"{kpis['most_congested_hour']}:00", style={'color': '#f39c12', 'margin': '0'}),
-            html.P("Peak Congestion Hour", style={'color': '#7f8c8d', 'margin': '5px 0'})
-        ], className='kpi-card'),
-    ], style={'display': 'flex', 'justifyContent': 'space-around', 'padding': '20px', 'flexWrap': 'wrap'}),
-    
-    # Filters
-    html.Div([
-        html.Div([
-            html.Label("📍 Select Route:", style={'fontWeight': 'bold', 'marginBottom': '5px'}),
-            dcc.Dropdown(
-                id='route-filter',
-                options=[{'label': r, 'value': r} for r in routes],
-                value=routes[0],
-                clearable=False,
-                style={'width': '100%'}
-            )
-        ], style={'flex': '1', 'marginRight': '20px'}),
-        
-        html.Div([
-            html.Label("🚦 Congestion Levels:", style={'fontWeight': 'bold', 'marginBottom': '5px'}),
-            dcc.Dropdown(
-                id='cong-filter',
-                options=[{'label': c, 'value': c} for c in cong_levels],
-                value=cong_levels,
-                multi=True,
-                style={'width': '100%'}
-            )
-        ], style={'flex': '1'}),
-    ], style={'display': 'flex', 'padding': '20px', 'backgroundColor': '#f8f9fa'}),
-    
-    # Charts Row 1
-    html.Div([
-        html.Div([
-            dcc.Graph(id='speed-trend-chart')
-        ], style={'flex': '1', 'marginRight': '10px'}),
-        
-        html.Div([
-            dcc.Graph(id='congestion-hour-chart')
-        ], style={'flex': '1', 'marginLeft': '10px'}),
-    ], style={'display': 'flex', 'padding': '20px'}),
-    
-    # Charts Row 2
-    html.Div([
-        html.Div([
-            dcc.Graph(id='route-congestion-chart')
-        ], style={'flex': '1', 'marginRight': '10px'}),
-        
-        html.Div([
-            dcc.Graph(id='route-performance-chart')
-        ], style={'flex': '1', 'marginLeft': '10px'}),
-    ], style={'display': 'flex', 'padding': '20px'}),
-    
-    # D3.js Visualization Section
-    html.Div([
-        html.H3("📊 D3.js Interactive Visualization", 
-                style={'color': '#2c3e50', 'marginBottom': '15px'}),
-        html.Div(id='d3-root', style={'minHeight': '400px'})
-    ], style={'padding': '20px', 'backgroundColor': '#f8f9fa', 'margin': '20px'}),
-    
-    # Footer
-    html.Div([
-        html.P("TerraFlow Analytics | CPS6005 Big Data Assessment | Powered by PySpark, Dash & D3.js",
-               style={'textAlign': 'center', 'color': '#95a5a6', 'padding': '20px'})
-    ])
-    
-], style={'fontFamily': 'Arial, sans-serif', 'backgroundColor': '#ffffff'})
-
-# ============================================================================
-# CALLBACKS
-# ============================================================================
-
-@app.callback(
-    [Output('speed-trend-chart', 'figure'),
-     Output('congestion-hour-chart', 'figure'),
-     Output('route-congestion-chart', 'figure'),
-     Output('route-performance-chart', 'figure')],
-    [Input('route-filter', 'value'),
-     Input('cong-filter', 'value')]
+# =============================================================================
+# COLUMN DETECTION (robust)
+# =============================================================================
+# congestion_by_hour expected: hour, Degree_of_congestion, count
+_, cong_col_hour, count_col_hour = detect_columns(
+    cong_hour,
+    route_candidates=["route_id", "route"],
+    cong_candidates=["Degree_of_congestion", "congestion_level", "congestion"],
+    count_candidates=["count", "records", "num_records", "total"]
 )
-def update_charts(selected_route, selected_cong_levels):
-    """Update all charts based on filter selections"""
-    
-    # Chart 1: Speed Trend by Hour
+if "hour" not in cong_hour.columns:
+    raise ValueError("congestion_by_hour.parquet must include 'hour' column.")
+if cong_col_hour is None or count_col_hour is None:
+    raise ValueError("congestion_by_hour.parquet must include congestion level + count columns.")
+
+# congestion_by_route expected: route + Degree_of_congestion + count
+route_col, cong_col_route, count_col_route = detect_columns(
+    cong_route,
+    route_candidates=["route_id", "route", "route_short_name", "Route", "trip_id"],
+    cong_candidates=["Degree_of_congestion", "congestion_level", "congestion"],
+    count_candidates=["count", "records", "num_records", "total"]
+)
+if route_col is None or cong_col_route is None or count_col_route is None:
+    raise ValueError("congestion_by_route.parquet must include route + congestion level + count columns.")
+
+# speed_trend expected: hour, avg_speed
+if "hour" not in speed_trend.columns:
+    raise ValueError("speed_trend.parquet must include 'hour'.")
+if "avg_speed" not in speed_trend.columns:
+    # try fallback
+    speed_candidates = ["mean_speed", "speed_avg", "speed"]
+    speed_col = next((c for c in speed_candidates if c in speed_trend.columns), None)
+    if speed_col:
+        speed_trend = speed_trend.rename(columns={speed_col: "avg_speed"})
+    else:
+        raise ValueError("speed_trend.parquet must include avg_speed (or equivalent).")
+
+# route_performance expected: route, avg_speed, congestion_rate, trip_count
+if route_perf is not None:
+    # detect route column if different
+    rp_route = next((c for c in ["route_id", "route", "route_short_name", "Route", route_col] if c in route_perf.columns), None)
+    if rp_route and rp_route != route_col:
+        route_perf = route_perf.rename(columns={rp_route: route_col})
+    needed = {route_col, "avg_speed", "congestion_rate", "trip_count"}
+    if not needed.issubset(set(route_perf.columns)):
+        route_perf = None  # fallback: disable efficiency scatter
+
+
+# =============================================================================
+# BASIC FILTER VALUES
+# =============================================================================
+routes = sorted(cong_route[route_col].dropna().astype(str).unique().tolist())
+cong_levels = sorted(cong_hour[cong_col_hour].dropna().astype(str).unique().tolist())
+
+min_hour = int(cong_hour["hour"].min())
+max_hour = int(cong_hour["hour"].max())
+
+
+# =============================================================================
+# APP
+# =============================================================================
+app = Dash(
+    __name__,
+    title="TerraFlow Urban Mobility Dashboard",
+    external_scripts=["https://d3js.org/d3.v7.min.js"],
+)
+server = app.server
+
+
+# =============================================================================
+# HELPERS
+# =============================================================================
+def kpi_card(title, value, subtitle=""):
+    return html.Div([
+        html.H3(title),
+        html.Div(value, className="metric-value"),
+        html.Div(subtitle, className="metric-subtitle") if subtitle else None
+    ], className="metric-card")
+
+def safe_div(a, b):
+    return a / b if b and b != 0 else 0
+
+
+# =============================================================================
+# LAYOUT
+# =============================================================================
+app.layout = html.Div([
+    html.Div([
+
+        html.Div([
+            html.H1("🚌 TerraFlow Urban Mobility Dashboard"),
+            html.P("Dynamic dashboards for congestion hotspots, route efficiency, and temporal patterns (Dash/Plotly + D3.js)."),
+        ], className="dashboard-header"),
+
+        html.Div([
+            html.Div([
+                html.Label("📍 Route", className="filter-label"),
+                dcc.Dropdown(
+                    id="route-filter",
+                    options=[{"label": r, "value": r} for r in routes],
+                    value=routes[0] if routes else None,
+                    clearable=False
+                )
+            ], className="filter-block"),
+
+            html.Div([
+                html.Label("🚦 Congestion Levels", className="filter-label"),
+                dcc.Dropdown(
+                    id="cong-filter",
+                    options=[{"label": c, "value": c} for c in cong_levels],
+                    value=cong_levels,
+                    multi=True
+                )
+            ], className="filter-block"),
+
+            html.Div([
+                html.Label("🕒 Hour Window", className="filter-label"),
+                dcc.RangeSlider(
+                    id="hour-range",
+                    min=min_hour, max=max_hour, step=1,
+                    value=[min_hour, max_hour],
+                    marks={h: str(h) for h in range(min_hour, max_hour + 1, 2)},
+                    tooltip={"placement": "bottom", "always_visible": False},
+                )
+            ], className="filter-block filter-wide"),
+        ], className="chart-container"),
+
+        html.Div(id="kpi-row", className="metrics-grid"),
+
+        html.Div([
+            html.Div([dcc.Graph(id="speed-trend-chart")], className="chart-container"),
+            html.Div([dcc.Graph(id="congestion-hour-chart")], className="chart-container"),
+        ], className="grid-2"),
+
+        html.Div([
+            html.Div([dcc.Graph(id="route-congestion-chart")], className="chart-container"),
+            html.Div([dcc.Graph(id="route-efficiency-chart")], className="chart-container"),
+        ], className="grid-2"),
+
+        html.Div([
+            html.Div([dcc.Graph(id="hotspot-heatmap-plotly")], className="chart-container"),
+            html.Div([
+                html.Div("Interactive Network: Topology & Efficiency Analysis", className="chart-title"),
+                html.Div(id="d3-network-root", style={"minHeight": "480px"}),
+                html.Div("Use controls (top-right) to switch between Topology Map and Efficiency Matrix views.", className="chart-note"),
+            ], className="chart-container"),
+        ], className="grid-2"),
+
+        html.Div([
+            html.Div("Interactive Congestion Heatmap: Temporal Patterns", className="chart-title"),
+            html.Div(id="d3-heatmap-root", style={"minHeight": "520px"}),
+            html.Div("Analyze temporal hotspots by Traffic Volume or Average Speed using the toggle controls.", className="chart-note"),
+        ], className="chart-container"),
+
+        html.Div([
+            html.P("TerraFlow Analytics | CPS6005 Big Data Assessment | PySpark + HDFS + Spark MLlib + Dash/Plotly + D3.js")
+        ], className="footer"),
+
+    ], className="dashboard-container")
+])
+
+
+# =============================================================================
+# CALLBACKS
+# =============================================================================
+@app.callback(
+    Output("kpi-row", "children"),
+    Output("speed-trend-chart", "figure"),
+    Output("congestion-hour-chart", "figure"),
+    Output("route-congestion-chart", "figure"),
+    Output("route-efficiency-chart", "figure"),
+    Output("hotspot-heatmap-plotly", "figure"),
+    Input("route-filter", "value"),
+    Input("cong-filter", "value"),
+    Input("hour-range", "value"),
+)
+def update_dashboard(selected_route, selected_levels, hour_range):
+    hmin, hmax = hour_range
+
+    # Filter: congestion by hour
+    ch = cong_hour.copy()
+    ch["Degree"] = ch[cong_col_hour].astype(str)
+    ch = ch[ch["hour"].between(hmin, hmax)]
+    ch = ch[ch["Degree"].isin([str(x) for x in selected_levels])]
+
+    # Filter: speed trend
+    st = speed_trend.copy()
+    st = st[st["hour"].between(hmin, hmax)]
+
+    # Filter: congestion by route for selected route
+    cr = cong_route.copy()
+    cr["Degree"] = cr[cong_col_route].astype(str)
+    cr[route_col] = cr[route_col].astype(str)
+    cr = cr[(cr[route_col] == str(selected_route)) & (cr["Degree"].isin([str(x) for x in selected_levels]))]
+
+    total_records = int(ch[count_col_hour].sum()) if len(ch) else 0
+    avg_speed = float(st["avg_speed"].mean()) if len(st) else 0.0
+
+    if len(ch):
+        peak_hour = int(ch.groupby("hour")[count_col_hour].sum().sort_values(ascending=False).index[0])
+    else:
+        peak_hour = None
+
+    if len(cr):
+        route_total = float(cr[count_col_route].sum())
+        high_labels = {"Heavy congestion", "High", "Severe"}
+        high_count = float(cr[cr["Degree"].isin(high_labels)][count_col_route].sum())
+        high_rate = safe_div(high_count, route_total) * 100
+    else:
+        high_rate = 0.0
+
+    kpis_out = [
+        kpi_card("Total Records (Filtered)", f"{total_records:,}", f"Hours {hmin}–{hmax}"),
+        kpi_card("Average Speed", f"{avg_speed:.1f} km/h", "Temporal trend"),
+        kpi_card("Peak Hour", f"{peak_hour}:00" if peak_hour is not None else "N/A", "Highest congestion volume"),
+        kpi_card("High Congestion Share (Route)", f"{high_rate:.1f}%", f"Route {selected_route}"),
+    ]
+
+    # Chart 1: speed trend (temporal)
     fig1 = go.Figure()
     fig1.add_trace(go.Scatter(
-        x=speed_trend['hour'],
-        y=speed_trend['avg_speed'],
-        mode='lines+markers',
-        name='Average Speed',
-        line=dict(color='#3498db', width=3),
-        marker=dict(size=8),
-        fill='tozeroy',
-        fillcolor='rgba(52, 152, 219, 0.2)'
+        x=st["hour"], y=st["avg_speed"],
+        mode="lines+markers",
+        line=dict(width=3),
+        marker=dict(size=7),
+        name="Avg speed"
     ))
-    
     fig1.update_layout(
-        title='Average Speed by Hour of Day',
-        xaxis_title='Hour',
-        yaxis_title='Speed (km/h)',
-        hovermode='x unified',
-        template='plotly_white',
-        height=400
+        title="Temporal Patterns: Average Speed by Hour",
+        xaxis_title="Hour of Day",
+        yaxis_title="Speed (km/h)",
+        template="plotly_white",
+        height=420,
+        hovermode="x unified"
     )
-    
-    # Chart 2: Congestion by Hour (Stacked Bar)
-    ch_filtered = cong_hour[cong_hour['Degree_of_congestion'].isin(selected_cong_levels)]
-    
+
+    # Chart 2: congestion distribution by hour (stacked)
     fig2 = px.bar(
-        ch_filtered,
-        x='hour',
-        y='count',
-        color='Degree_of_congestion',
-        title='Congestion Distribution by Hour',
-        labels={'count': 'Number of Records', 'hour': 'Hour of Day'},
-        color_discrete_sequence=px.colors.qualitative.Set2,
-        barmode='stack'
+        ch, x="hour", y=count_col_hour, color="Degree",
+        barmode="stack",
+        title="Temporal Patterns: Congestion Distribution by Hour",
+        labels={count_col_hour: "Records", "hour": "Hour", "Degree": "Congestion Level"},
     )
-    
-    fig2.update_layout(
-        xaxis_title='Hour',
-        yaxis_title='Count',
-        template='plotly_white',
-        height=400,
-        legend_title='Congestion Level'
+    fig2.update_layout(template="plotly_white", height=420)
+
+    # Chart 3: route congestion composition
+    if len(cr) == 0:
+        fig3 = go.Figure()
+        fig3.add_annotation(text="No data for selected filters", showarrow=False)
+        fig3.update_layout(title="Route Composition: Congestion Levels", template="plotly_white", height=420)
+    else:
+        fig3 = px.pie(
+            cr, values=count_col_route, names="Degree",
+            hole=0.45,
+            title=f"Route Efficiency (Proxy): Congestion Mix — Route {selected_route}"
+        )
+        fig3.update_traces(textposition="inside", textinfo="percent+label")
+        fig3.update_layout(template="plotly_white", height=420)
+
+    # Chart 4: route efficiency scatter (speed vs congestion rate)
+    if route_perf is None:
+        fig4 = go.Figure()
+        fig4.add_annotation(
+            text="route_performance.parquet not found. Export it in Notebook 06 for full efficiency chart.",
+            showarrow=False
+        )
+        fig4.update_layout(title="Route Efficiency: Speed vs Congestion Rate", template="plotly_white", height=420)
+    else:
+        rp = route_perf.copy()
+        rp[route_col] = rp[route_col].astype(str)
+        top = rp.nlargest(25, "trip_count")
+
+        fig4 = px.scatter(
+            top, x="avg_speed", y="congestion_rate",
+            size="trip_count",
+            hover_name=route_col,
+            title="Route Efficiency: Avg Speed vs Congestion Rate (Top Routes)",
+            labels={"avg_speed": "Avg Speed (km/h)", "congestion_rate": "Congestion Rate (0–1)", "trip_count": "Trips"}
+        )
+        fig4.update_layout(template="plotly_white", height=420)
+
+    # Chart 5: hotspot heatmap (plotly) hour × congestion
+    pivot = ch.pivot_table(index="Degree", columns="hour", values=count_col_hour, aggfunc="sum", fill_value=0)
+    fig5 = px.imshow(
+        pivot,
+        aspect="auto",
+        title="Congestion Hotspots (Plotly): Hour × Level Intensity",
+        labels=dict(x="Hour", y="Congestion Level", color="Count")
     )
-    
-    # Chart 3: Route Congestion Breakdown
-    cr_filtered = cong_route[
-        (cong_route[route_col] == selected_route) &
-        (cong_route['Degree_of_congestion'].isin(selected_cong_levels))
-    ]
-    
-    fig3 = px.pie(
-        cr_filtered,
-        values='count',
-        names='Degree_of_congestion',
-        title=f'Congestion Breakdown: Route {selected_route}',
-        color_discrete_sequence=px.colors.qualitative.Pastel,
-        hole=0.4
-    )
-    
-    fig3.update_traces(textposition='inside', textinfo='percent+label')
-    fig3.update_layout(template='plotly_white', height=400)
-    
-    # Chart 4: Top Routes by Performance
-    top_routes = route_perf.nlargest(10, 'trip_count')
-    
-    fig4 = go.Figure()
-    
-    fig4.add_trace(go.Bar(
-        x=top_routes[route_col],
-        y=top_routes['avg_speed'],
-        name='Avg Speed',
-        marker_color='#2ecc71',
-        yaxis='y'
-    ))
-    
-    fig4.add_trace(go.Scatter(
-        x=top_routes[route_col],
-        y=top_routes['congestion_rate'] * 100,
-        name='Congestion Rate (%)',
-        marker_color='#e74c3c',
-        yaxis='y2',
-        mode='lines+markers',
-        line=dict(width=3)
-    ))
-    
-    fig4.update_layout(
-        title='Top 10 Routes: Speed vs Congestion Rate',
-        xaxis_title='Route',
-        yaxis=dict(title='Average Speed (km/h)', side='left'),
-        yaxis2=dict(title='Congestion Rate (%)', side='right', overlaying='y'),
-        template='plotly_white',
-        height=400,
-        hovermode='x unified'
-    )
-    
-    return fig1, fig2, fig3, fig4
+    fig5.update_layout(template="plotly_white", height=420)
 
-# ============================================================================
-# CSS STYLING
-# ============================================================================
+    return kpis_out, fig1, fig2, fig3, fig4, fig5
 
-app.index_string = '''
-<!DOCTYPE html>
-<html>
-    <head>
-        {%metas%}
-        <title>{%title%}</title>
-        {%favicon%}
-        {%css%}
-        <style>
-            .kpi-card {
-                background: white;
-                padding: 20px;
-                border-radius: 10px;
-                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-                margin: 10px;
-                min-width: 200px;
-                text-align: center;
-                transition: transform 0.2s;
-            }
-            .kpi-card:hover {
-                transform: translateY(-5px);
-                box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-            }
-        </style>
-    </head>
-    <body>
-        {%app_entry%}
-        <footer>
-            {%config%}
-            {%scripts%}
-            {%renderer%}
-        </footer>
-    </body>
-</html>
-'''
 
-# ============================================================================
-# RUN SERVER
-# ============================================================================
-
-if __name__ == '__main__':
-    print("\n" + "="*70)
-    print("🚀 TerraFlow Dashboard Starting...")
-    print("="*70)
-    print("📊 Dashboard URL: http://localhost:8050")
-    print("🔄 Press Ctrl+C to stop the server")
-    print("="*70 + "\n")
-    
-    app.run_server(debug=True, host='0.0.0.0', port=8050)
+# =============================================================================
+# RUN
+# =============================================================================
+if __name__ == "__main__":
+    print("🚀 TerraFlow Dashboard: http://localhost:8050")
+    app.run(debug=True, host="0.0.0.0", port=8050)

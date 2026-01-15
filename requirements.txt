@@ -16,7 +16,7 @@ bokeh>=3.1.0
 scipy>=1.10.0
 
 # Big Data Processing
-pyspark>=3.4.0
+pyspark==3.5.0
 dask>=2023.5.0
 
 # HDFS Client

@@ -2,176 +2,123 @@
 
 **CPS6005 Assessment 2 - Big Data Analytics**
 
-> Big data pipeline for analyzing urban public transport using PySpark, HDFS, Machine Learning, and Interactive Visualization
+> **Big Data Pipeline & Interactive Dashboard**: PySpark, HDFS, Machine Learning, and Advanced D3.js Visualizations.
 
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
 [![PySpark](https://img.shields.io/badge/PySpark-3.3-orange.svg)](https://spark.apache.org/)
-[![Docker](https://img.shields.io/badge/Docker-Compose-blue.svg)](https://www.docker.com/)
+[![HDFS](https://img.shields.io/badge/Hadoop%20HDFS-3.2-yellow.svg)](https://hadoop.apache.org/)
+[![Dash](https://img.shields.io/badge/Dash-Plotly-success.svg)](https://dash.plotly.com/)
+[![D3.js](https://img.shields.io/badge/D3.js-v7-orange.svg)](https://d3js.org/)
 
 ---
 
 ## 📋 Overview
 
-Analysis of **66,437 GTFS transport records** to address urban mobility challenges:
-- Urban congestion hotspots
-- Temporal variability in transport patterns
-- Service reliability and delay prediction
-- Route efficiency optimization
-- Passenger demand forecasting
+This project analyzes **66,437 GTFS transport records** to address urban mobility challenges. It features a complete distributed data pipeline (HDFS + Spark) and a professional dashboard for decision-making.
 
-**Key Results:**
-- ✅ Random Forest model: **85%+ accuracy** for congestion prediction
-- ✅ Statistical analysis: Peak hours significantly impact speed (p < 0.001)
-- ✅ Bayesian inference: **10.15%** severe congestion probability during peak hours
-- ✅ Interactive dashboard with **Dash, Plotly, and D3.js**
+**Key Features:**
+*   **Big Data Processing**: Distributed analysis using Apache Spark and HDFS.
+*   **Predictive ML**: Random Forest model achieving **85%+ accuracy** for congestion forecasting.
+*   **Statistical Rigor**: Bayesian inference and hypothesis testing (t-tests).
+*   **Interactive Dashboard**: A premium UI integrating Dash (Plotly) with **Custom D3.js Modules**.
+    *   *Route Efficiency Matrix*: Interactive clustering of route performance.
+    *   *Congestion Hotspots*: Dynamic temporal heatmaps with metric toggles.
 
 ---
 
-## 🛠 Technology Stack
+## 🚀 QUICK START (3 Steps)
 
-| Component | Technology | Purpose |
-|-----------|-----------|---------|
-| **Storage** | HDFS (Hadoop 3.2) | Distributed file system |
-| **Processing** | Apache Spark 3.3 | Big data processing |
-| **Language** | Python 3.11 + PySpark | Data analysis & ML |
-| **ML** | Spark MLlib | Random Forest classifier |
-| **Visualization** | Dash, Plotly, D3.js | Interactive dashboards |
-| **Environment** | Docker Compose | Containerization |
+### Step 1: Initialize System
+This automated script starts the Docker stack (HDFS, Spark, Jupyter), uploads the raw data, and prepares the environment.
+
+```powershell
+cd C:\Users\prabi\OneDrive\Desktop\CPs6005
+.\start_project.ps1
+```
+
+### Step 2: Execute Analysis Pipeline
+Open **[http://localhost:8888](http://localhost:8888)** and run the notebooks in order:
+1.  **01_ingest_hdfs_spark.ipynb**: Ingests raw data into HDFS.
+2.  **02_clean_features.ipynb**: Cleanses data and engineers features.
+3.  **03_eda_visuals.ipynb**: Exploratory Data Analysis (8+ charts).
+4.  **04_statistics.ipynb**: Hypothesis testing & Bayesian analysis.
+5.  **05_spark_mllib_model.ipynb**: Train/Evaluate Random Forest Model.
+6.  **06_export_for_dashboard.ipynb**: Exports processed data for the web app.
+
+### Step 3: Launch Interactive Dashboard
+Run the dashboard to visualize the results:
+
+```powershell
+cd dashboard
+pip install dash plotly pandas pyarrow
+python app.py
+```
+> Access Dashboard: **[http://localhost:8050](http://localhost:8050)**
+
+---
+
+## ✅ Assignment Requirements Met
+
+### 1. Distributed Data Processing (PySpark)
+*   **Implementation**: Full usage of Spark Cluster (Master/Worker) for all data transformation.
+*   **Features**: Custom Schema definition, RDD mappings, Window functions.
+
+### 2. Scalable Storage (HDFS)
+*   **Implementation**: Dockerized Hadoop HDFS.
+*   **Data Flow**: Raw CSV → HDFS (`/terraflow/data/raw`) → Spark DataFrames → Parquet.
+
+### 3. Predictive Modelling (Spark MLlib)
+*   **Model**: Random Forest Classifier (Depth: 10, Trees: 100).
+*   **Outcome**: **85% Accuracy**, effectively predicting "Severe" vs "Smooth" traffic conditions.
+
+### 4. Statistical Analysis
+*   **Inferential**: Welch's t-test confirms significant difference between Peak/Off-Peak speeds (p < 0.001).
+*   **Bayesian**: Posterior probability analysis reveals a **10.15% risk** of severe congestion during peak hours.
+
+### 5. Interactive Visualization (Python + D3.js)
+*   **Requirement**: "Visualise congestion hotspots, route efficiency, and temporal patterns".
+*   **Solution**: 
+    *   **D3 Route Network**: Force-directed graph with a "Efficiency Matrix" toggle to analyze Speed vs Congestion.
+    *   **D3 Heatmap**: Interactive temporal view with "Traffic Volume" vs "Avg Speed" toggles.
+    *   **Dash Integration**: Seamlessly embedded alongside Plotly charts.
 
 ---
 
 ## 📁 Project Structure
 
-```
+```text
 CPs6005/
+├── dashboard/                  # Web Application
+│   ├── app.py                  # Main Dash Application
+│   └── assets/
+│       ├── d3_route_network.js      # Advanced D3: Network/Efficiency Viz
+│       ├── d3_congestion_heatmap.js # Advanced D3: Temporal Heatmap
+│       └── styles.css               # Professional Styling
 ├── data/
-│   ├── raw/                          # Original GTFS CSV
-│   └── processed/                    # Dashboard exports
-├── notebooks/                        # Execute in order 01-06
-│   ├── 01_ingest_hdfs_spark.ipynb   # Data ingestion → Bronze
-│   ├── 02_clean_features.ipynb      # Cleaning → Silver
-│   ├── 03_eda_visuals.ipynb         # 8 visualizations + insights
-│   ├── 04_statistics.ipynb          # Inferential + Bayesian stats
-│   ├── 05_spark_mllib_model.ipynb   # ML classification
-│   └── 06_export_for_dashboard.ipynb # Dashboard data prep
-├── dashboard/
-│   ├── app.py                        # Dash application
-│   └── assets/d3_congestion.js       # D3.js visualization
-├── docker/
-│   └── hadoop.env                    # HDFS configuration
-├── scripts/
-│   └── upload_to_hdfs.sh            # Upload data to HDFS
-├── docker-compose.yml                # Services orchestration
-└── requirements.txt                  # Python dependencies
+│   ├── raw/                    # Raw GTFS Datasets
+│   └── processed/              # Dashboard Export Files (Parquet/JSON)
+├── notebooks/                  # Jupyter Analysis Notebooks (01-06)
+├── docker/                     # Docker Configs
+├── scripts/                    # Utility Scripts (HDFS Upload, Stack Start)
+├── docker-compose.yml          # Infrastructure Orchestration
+├── requirements.txt            # Python Dependencies
+└── start_project.ps1           # Automated Setup Script
 ```
 
 ---
 
-## 🚀 Quick Start
-
-### Prerequisites
-- Docker Desktop (running)
-- 8GB+ RAM
-- 10GB+ disk space
-
-### 1. Start Environment
-
-```bash
-cd CPs6005
-docker compose up -d
-docker compose ps  # Verify all services running
-```
-
-### 2. Upload Data to HDFS
-
-```bash
-bash scripts/upload_to_hdfs.sh
-docker exec namenode hdfs dfs -ls /terraflow/data/raw  # Verify
-```
-
-### 3. Run Notebooks (20 minutes)
-
-Access Jupyter: `http://localhost:8888`
-
-Execute in order:
-1. **01_ingest_hdfs_spark.ipynb** (2 min) - Load data, create Bronze layer
-2. **02_clean_features.ipynb** (3 min) - Clean data, create Silver layer
-3. **03_eda_visuals.ipynb** (4 min) - 8 charts + insights
-4. **04_statistics.ipynb** (3 min) - Hypothesis testing + Bayesian analysis
-5. **05_spark_mllib_model.ipynb** (5 min) - Train ML model (85%+ accuracy)
-6. **06_export_for_dashboard.ipynb** (2 min) - Export dashboard data
-
-### 4. Launch Dashboard
-
-```bash
-cd dashboard
-pip install dash plotly pandas pyarrow
-python app.py
-```
-
-Access: `http://localhost:8050`
+## 📊 Key Insights & Results
+1.  **Peak Congestion**: The "Severe" congestion probability jumps to **10.15%** during peak windows (7-9 AM, 5-7 PM).
+2.  **Critical Routes**: Specific routes (visualized in the D3 Efficiency Matrix) show high volume but low speeds (<20 km/h), marking them as candidates for intervention.
+3.  **Predictive Power**: Average speed is the strongest predictor of congestion level (65% feature importance).
 
 ---
-
-## 📊 Key Results
-
-### Data Processing
-- **66,437 records** processed with PySpark
-- **Medallion architecture**: Raw → Bronze → Silver
-- **HDFS storage** for scalability
-
-### Machine Learning
-- **Algorithm**: Random Forest (100 trees, depth 10)
-- **Accuracy**: 85%+
-- **Features**: speed, hour, SRI, is_peak
-- **Top predictor**: Speed (65% importance)
-
-### Statistical Analysis
-- **Welch's t-test**: Peak vs off-peak speeds significantly different (p < 0.001)
-- **Effect size**: Cohen's d = 0.08
-- **Bayesian**: 10.15% severe congestion probability [95% CI: 9.80%-10.51%]
-- **Correlation**: Speed vs SRI = -0.47
-
-### Visualizations
-- **8 EDA charts** (matplotlib/seaborn)
-- **4 interactive Plotly charts** (dashboard)
-- **1 custom D3.js visualization** (animated bar chart)
-
-### Key Insights
-1. Peak hours: 7-9 AM, 5-7 PM
-2. Most congested hour: 18:00 (6 PM)
-3. Speed is strongest congestion predictor
-4. Significant route-level variability
-5. Temporal patterns highly predictable
 
 ## 🔧 Troubleshooting
-
-### Docker Issues
-```bash
-docker compose down
-docker compose up -d
-docker logs namenode  # Check HDFS
-```
-
-### HDFS Connection
-```bash
-docker exec namenode hdfs dfsadmin -report
-docker exec namenode hdfs dfs -ls /terraflow/data
-```
-
-### Dashboard Not Loading
-```bash
-ls -lh data/processed/  # Verify exports
-pip install -r requirements.txt
-python dashboard/app.py
-```
+*   **Dashboard No Data?**: Ensure you ran **Notebook 06** to generate the export files in `data/processed/`.
+*   **HDFS Errors?**: Run `docker restart namenode` if the connection is lost.
+*   **Dependency Issues?**: `pip install -r requirements.txt` (or run Step 3 install command).
 
 ---
 
-## 📚 Key Technologies
-
-- [Apache Spark](https://spark.apache.org/docs/latest/)
-- [PySpark API](https://spark.apache.org/docs/latest/api/python/)
-- [Hadoop HDFS](https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-hdfs/HdfsUserGuide.html)
-- [Dash](https://dash.plotly.com/)
-- [D3.js](https://d3js.org/)
+**Status**: ✅ COMPLETE | **Last Updated**: 2026-01-15

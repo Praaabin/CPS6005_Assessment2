@@ -1,0 +1,11 @@
+{
+  "total_records": 66437,
+  "avg_speed": 41.47841986547107,
+  "avg_sri": -2.239957690769892,
+  "peak_avg_speed": 42.25409388591623,
+  "offpeak_avg_speed": 40.93505692832031,
+  "peak_count": 27368,
+  "offpeak_count": 39069,
+  "most_congested_hour": 14,
+  "most_congested_count": 5195
+}
